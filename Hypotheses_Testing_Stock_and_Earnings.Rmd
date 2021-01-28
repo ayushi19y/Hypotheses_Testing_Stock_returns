@@ -1,0 +1,77 @@
+---
+title: "Hypotheses Testing - Stock Prices are related to Earnings"
+author: "Ayushi Yadav"
+date: "1/28/2021"
+output: html_document
+---
+
+### Effect of Earnings on Stock Price of a Firm.
+Stock prices reflect value of the company, earnings per share or dividend it pays to shareholders and the market's expectation of the future of the company. The value of the company can be linked to its earnings but is not always directly related. Keeping this in mind, one might wonder if the income of a firm affects its stock price. The following study examines this relationship. 
+
+### Analysis Methodology
+Stock return is a continuous variable, making it a good candidate for linear or OLS regression, assuming that the relationship between the two is linear. To examine this relationship a compustat data file containing income information for different firms from the year 2000 to 2016. In a function taking income file, start year and end year as inputs, yearly returns for the firms are extracted. Data is subsetted for the start - end year period defined function input. The resulting xts object is converted to a dataframe and in turn converted to a long format data using the melt() function provided by reshape2 library to match the format of the compustat data file. The data is given the same column name for fyear and tic to effectively merge the file using them as primary key. Simple linear regression is run on the data Taking Annual Returns as the dependent variable and Net Income as the X variable. The function returns the regression results summary and the combined dataframe whih is needed to plot the regression line. 
+
+```{r message=FALSE, warning=FALSE}
+#------loading libraries---------#
+library(dplyr)
+library(ggplot2)
+library(quantmod)
+options("getSymbols.warning4.0"=FALSE)#suppress  get symbols warnings
+library(zeallot)
+library(matrixStats)
+library(reshape2)
+```
+
+```{r}
+data_file <- "/Users/ayushiyadav/Desktop/RIT/SEMESTER_5/Financial_Analytics/Hypotheses_Testing/Compustat data small 2000-17.csv"
+income_df <- read.csv(data_file,na.strings = "C")
+analyse_stock_price <- function(income_df, start_year=2014, end_year=2016)
+{
+  ticker <- unique(income_df$tic) #extracting unique ticker values from tic column
+  stock_returns <- NULL
+  stock_returns <- xts(stock_returns)
+  for(i in 1:length(ticker)){
+  prices <- getSymbols(ticker[i], auto.assign = F)
+  yearly_returns <- periodReturn(prices, period = "yearly", 
+                            type = "arithmetic")
+  stock_returns <- merge.xts(stock_returns,yearly_returns)
+  }
+  colnames(stock_returns) <- ticker
+  stock_returns <- stock_returns[paste0(start_year,'/',end_year)]
+  stock_returns <- na.omit(stock_returns)
+  stock_returns$Year <- format(index(stock_returns), "%Y")
+  stock_returns_df <- as.data.frame(stock_returns) #converting xts to dataframe
+  stock_price_df1 <- melt(stock_returns_df, id.vars = "Year") #converting dataframe to long format 
+  colnames(stock_price_df1) <- c("fyear", "tic", "Annual_Returns")
+  
+  income_df1 <- income_df %>% select(fyear, tic, ni) %>% rename("Net_Income" = "ni") %>%
+    filter(fyear >= " 2014" & fyear <= "2016")
+
+  combined_df <- merge(stock_price_df1, income_df1, by = c("fyear", "tic"))
+  combined_df <- na.omit(combined_df)
+  
+  ols_reg <- lm(Annual_Returns ~ Net_Income, data = combined_df)
+  result <- summary(ols_reg)
+  print(result)
+  ret <- list(combined_df, result)
+  return(ret)
+}
+```
+
+```{r}
+c(combined_df, result) %<-% analyse_stock_price(income_df, ,)
+```
+
+### Visualising 
+A graph is plotted with the regression line. and it can be seen clearly that the data does not fit the model. 
+```{r}
+ggplot(combined_df, aes(x=Net_Income, y=Annual_Returns))+
+  geom_point()+
+  geom_smooth(method = lm)
+```
+
+
+### Result and Discussion
+In examining the effect of Firm income of stock prices. The deflated model performs poorly, effectively proving that there is inverse or at best no relation between stock returns and net income of a firm. An r-squared value of 0.008 is conclusive proof that the model is not fit to explain a single data case. This can be due to a number of factors. The negative coefficient indicates an inverse relationship. For every 1 unit increase in the net income, the stock prices decrease by 0.00000149 units which is almost equal to zero. However, the high p-value of 0.5 of the results suggest that the there is not enough information to declare net income as a significant variable in determining the stock price. Due to reasons cited above, the hypotheses is rejected. Short-term motion of a stock is even less linked to earnings because of previous expectations. Insufficient sales can also cause the stock price to climb is the expectation was worse for the company. Given the capricious market sentiment, net income cannot be declared as a variable affecting stock price.
+
+
